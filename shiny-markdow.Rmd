@@ -1,0 +1,145 @@
+---
+title: "final-project-rshiny"
+author: "Christine"
+date: "2026-05-06"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(DESeq2)
+
+# Load raw counts
+counts_raw <- read_tsv("GSE64810_raw_counts_GRCh38.p13_NCBI.tsv")
+
+# Load annotation
+annot <- read_tsv("Human.GRCh38.p13.annot.tsv")
+
+# Pivot counts to long format
+counts_long <- counts_raw %>%
+  pivot_longer(
+    cols = starts_with("GSM"),
+    names_to = "accession",
+    values_to = "counts"
+  )
+
+# Join counts with annotation
+joined1 <- counts_long %>% left_join(annot, by = "GeneID")
+```
+
+
+
+```{r}
+# read all lines from the file
+lines <- readLines("GSE64810_series_matrix.txt")
+title_line <- lines[grep("Sample_title", lines)]
+accession_line <- lines[grep("Sample_geo_accession", lines)]
+
+titles <- strsplit(title_line, "\t")[[1]]
+accessions <- strsplit(accession_line, "\t")[[1]]
+
+mapping <- data.frame(title = titles, accession = accessions)
+mapping <- mapping[-1, ]
+
+mapping$accession <- gsub("\"", "", mapping$accession)
+mapping$title <- gsub("\"", "", mapping$title)
+
+# Add condition column
+mapping <- mapping %>%
+  mutate(condition = ifelse(startsWith(title, "C"), "Control", "Huntington's Disease"))
+
+# Final join
+joined_data <- joined1 %>% left_join(mapping, by = "accession")
+```
+
+Build the counts matrix
+
+```{r}
+
+#build coldata
+coldata <- mapping %>% select(accession, title, condition)
+
+#manually doing column -> row names
+
+rownames(coldata) <- coldata$accession
+coldata$accession <- NULL
+
+#back to wide format
+
+counts_wide <- counts_long %>%
+  pivot_wider(
+    names_from = accession,
+    values_from = counts
+  ) %>%
+  column_to_rownames("GeneID")
+
+counts_mat <- as.matrix(counts_wide)
+storage.mode(counts_mat) <- "integer"
+all(colnames(counts_mat) == rownames(coldata))
+
+```
+
+filter 
+```{r}
+control_samples <- rownames(coldata)[coldata$condition == "Control"]
+counts_control <- counts_mat[, control_samples]
+huntington_samples <- rownames(coldata)[coldata$condition == "Huntington's Disease"]
+counts_hd <- counts_mat[, huntington_samples]
+
+# count zeros per gene in each condition
+zeros_control <- rowSums(counts_control == 0)
+zeros_hd <- rowSums(counts_hd == 0)
+
+# keep genes where fewer than half of samples in BOTH conditions are zero
+keep <- zeros_control <= (ncol(counts_control) / 2) & 
+        zeros_hd <= (ncol(counts_hd) / 2)
+
+# apply filter
+counts_filtered <- counts_mat[keep, ]
+
+# check how many genes kept vs removed
+cat("Genes before filtering:", nrow(counts_mat), "\n")
+cat("Genes after filtering:", nrow(counts_filtered), "\n")
+cat("Genes removed:", nrow(counts_mat) - nrow(counts_filtered))
+
+```
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = counts_filtered,
+                              colData = coldata,
+                              design= ~condition)
+
+dds$condition <- relevel(dds$condition, ref = "Control")
+
+dds <- DESeq(dds)
+res <- results(dds, contrast = c("condition", "Huntington's Disease", "Control"))
+summary(res)
+
+```
+
+```{r}
+# convert to dataframe
+res_df <- as.data.frame(res)
+res_df$GeneID <- as.numeric(rownames(res_df))
+
+# add gene symbols from annotation
+res_df <- res_df %>%
+  left_join(annot %>% select(GeneID, Symbol, Description), by = "GeneID")
+
+# save
+write.csv(res_df, "de_results.csv", row.names = FALSE)
+
+vst_counts <- vst(dds, blind = FALSE)
+norm_counts <- as.data.frame(assay(vst_counts))
+norm_counts$GeneID <- as.numeric(rownames(norm_counts))
+norm_counts <- norm_counts %>%
+  left_join(annot %>% select(GeneID, Symbol), by = "GeneID")
+
+write.csv(norm_counts, "normalized_counts.csv", row.names = FALSE)
+write.csv(coldata, "sample_info.csv", row.names = TRUE)
+```
+
+```{r}
+getwd()
+```
+
