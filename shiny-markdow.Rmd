@@ -33,6 +33,9 @@ joined1 <- counts_long %>% left_join(annot, by = "GeneID")
 # read all lines from the file
 lines <- readLines("GSE64810_series_matrix.txt")
 title_line <- lines[grep("Sample_title", lines)]
+age_line <- lines[grep("age of death", lines)]
+pmi_line <- lines[grep("!Sample_characteristics.*pmi:", lines)]
+rin_line <- lines[grep("!Sample_characteristics.*rin:", lines)]
 accession_line <- lines[grep("Sample_geo_accession", lines)]
 
 titles <- strsplit(title_line, "\t")[[1]]
@@ -42,6 +45,20 @@ mapping <- data.frame(title = titles, accession = accessions)
 mapping <- mapping[-1, ]
 
 mapping$accession <- gsub("\"", "", mapping$accession)
+# split and clean age, pmi, rin
+ages <- strsplit(age_line, "\t")[[1]][-1]
+pmis <- strsplit(pmi_line, "\t")[[1]][-1]
+rins <- strsplit(rin_line, "\t")[[1]][-1]
+
+# clean quotes and extract just the number
+ages <- as.numeric(gsub(".*: |\"", "", ages))
+pmis <- as.numeric(gsub(".*: |\"", "", pmis))
+rins <- as.numeric(gsub(".*: |\"", "", rins))
+
+# add to mapping
+mapping$age_of_death <- ages
+mapping$pmi <- pmis
+mapping$rin <- rins
 mapping$title <- gsub("\"", "", mapping$title)
 
 # Add condition column
@@ -57,7 +74,7 @@ Build the counts matrix
 ```{r}
 
 #build coldata
-coldata <- mapping %>% select(accession, title, condition)
+coldata <- mapping %>% select(accession, title, condition, age_of_death, pmi, rin)
 
 #manually doing column -> row names
 
@@ -139,7 +156,7 @@ write.csv(norm_counts, "normalized_counts.csv", row.names = FALSE)
 write.csv(coldata, "sample_info.csv", row.names = TRUE)
 ```
 
-```{r}
-getwd()
-```
+
+
+
 
