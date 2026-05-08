@@ -5,6 +5,11 @@ library(DT)
 library(pheatmap)
 library(ggrepel)
 library(igraph)
+library(showtext)
+
+# load Press Start 2P for plots
+font_add_google("Press Start 2P", "pressstart")
+showtext_auto()
 
 #  pre functions
 make_summary <- function(df) {
@@ -25,6 +30,35 @@ options(shiny.maxRequestSize = 32 * 1024^2) #counts was too big
 
 # ui
 ui <- page_fluid(
+  theme = bs_theme(
+    bg = "#cccccc", fg = "#0d0c0c", primary = "#dd2020",
+    base_font = font_google("Press Start 2P"),
+    code_font = font_google("Press Start 2P"),
+    "font-size-base" = "0.7rem", "enable-rounded" = FALSE  # smaller font
+  ) %>%
+    bs_add_rules(
+      list(
+        sass::sass_file("nes.min.css"),
+        "
+        .nav-link { font-size: 0.6rem !important; }
+        .btn { font-size: 0.6rem !important; }
+        .btn { font-size: 0.65rem !important; }
+        input[type='file']::file-selector-button { font-size: 0.65rem !important; }
+        input[type='file'] { font-size: 0.65rem !important; }
+        .form-control { font-size: 0.65rem !important; }
+        .app-header { padding: 1rem 0; border-bottom: 3px solid #dd2020; margin-bottom: 1rem; }
+        .tab-description { color: #555; font-size: 0.45rem; margin-bottom: 0.5rem; padding: 0.4rem; border-left: 3px solid #dd2020; }
+    "
+      )
+    ),
+  
+  # header
+  div(class = "app-header",
+      p("Christine Snow | Final Project | BF530", style = "margin: 0; color: #dd2020;"),
+      h2("RNA-seq Expression Analysis: Huntington's Disease vs. Neurologically Normal Controls (GSE64810)",
+         style = "margin: 0.25rem 0 0 0; font-size: 0.55rem;")
+  ),
+  
   navset_tab(
     
     # tab 1, sample info
@@ -35,6 +69,12 @@ ui <- page_fluid(
                   selectInput("plot_col", "Select column to plot", choices = NULL)
                 ),
                 mainPanel(
+                  # tab description
+                  div(class = "tab-description",
+                      p("Upload the sample information CSV to explore metadata across samples.
+                      The Summary tab shows column types and values. The Data tab shows a sortable
+                      table. The Plot tab shows distributions of continuous variables.")
+                  ),
                   navset_card_underline(
                     nav_panel("Plot", plotOutput("plot")), #tab1a
                     nav_panel("Summary", tableOutput("summary")), #tab1b
@@ -55,6 +95,12 @@ ui <- page_fluid(
                               min = 0, max = 100, value = 10)
                 ),
                 mainPanel(
+                  # tab description
+                  div(class = "tab-description",
+                      p("Upload the normalized counts CSV. Use the sliders to filter genes by
+                      variance percentile and minimum non-zero samples. Plots update reactively
+                      as filters change.")
+                  ),
                   navset_card_underline(
                     nav_panel("Summary", tableOutput("summary2")), #tab 2a
                     nav_panel("Scatter Plot", plotOutput("scatterplot")),  # tab2b; median vs variance
@@ -73,6 +119,12 @@ ui <- page_fluid(
                   fileInput("file3", "Choose Differential Expression CSV File", accept = ".csv"), #side bar
                 ),
                 mainPanel(
+                  # tab description
+                  div(class = "tab-description",
+                      p("Upload the DESeq2 results CSV. The Summary tab shows a sortable table of
+                      all DE results. The Volcano Plot shows log2 fold change vs -log10 adjusted
+                      p-value, colored by significance (padj < 0.05).")
+                  ),
                   navset_card_underline(
                     nav_panel("Summary", DT::dataTableOutput("summary3")), #tab 2a
                     nav_panel("Volcano Plot", plotOutput("volcanoplot")),  # tab2b; median vs variance #tab2e
@@ -82,7 +134,6 @@ ui <- page_fluid(
     ),
     
     # tab 4 network analysis
-    
     nav_panel("Network Analysis",       
               sidebarLayout(
                 sidebarPanel(
@@ -93,6 +144,13 @@ ui <- page_fluid(
                   actionButton("button1", "send it", icon = shiny::icon("bomb"))
                 ),
                 mainPanel(
+                  # tab description
+                  div(class = "tab-description",
+                      p("Upload normalized counts, enter gene names one per line, set a minimum
+                      correlation threshold, and hit send it. The network shows pairwise gene
+                      correlations as edges. The stats table shows degree, closeness, and
+                      betweenness centrality per gene.")
+                  ),
                   navset_card_underline(
                     nav_panel("Stats", DT::dataTableOutput("data4")), 
                     nav_panel("Heatmap", plotOutput("heatmap4")), 
@@ -145,10 +203,11 @@ server <- function(input, output, session) {
       variance = apply(counts_filtered2(), 1, var)
     )
     ggplot(gene_stats, aes(x = median, y = variance)) +
-      geom_point(alpha = 0.3) +
+      geom_point(alpha = 0.3, color = "#dd2020") +
       scale_x_log10() +
       scale_y_log10() +
       theme_bw() +
+      theme(text = element_text(family = "pressstart")) + # match font
       labs(title = "Median Count vs Variance", x = "Median Count", y = "Variance")
   })
   
@@ -208,11 +267,11 @@ server <- function(input, output, session) {
         ceiling
       )
       
-      # Set the plot colors
+      # updated plot colors to match theme
       plot_colors <- c(
-        'up' = 'firebrick1',
-        'ns' = 'gray',
-        'down' = 'dodgerblue1'
+        'up' = '#dd2020',      # matches primary red
+        'ns' = '#c5c5c8',      # matches bg grey
+        'down' = '#4a90d9'     # softer blue
       )
       
       
@@ -251,6 +310,7 @@ server <- function(input, output, session) {
         ) +
         theme_bw(base_size = 24) +
         theme(
+          text = element_text(family = "pressstart"), # match font
           axis.text = element_text(color = 'black'),
           legend.margin = margin(0, 0, 0, 0),
           legend.spacing.x = unit(0.2, 'cm')
@@ -312,10 +372,11 @@ server <- function(input, output, session) {
   output$plot <- renderPlot({
     req(input$plot_col)
     ggplot(data(), aes(x = .data[[input$plot_col]])) +
-      geom_histogram(fill = "steelblue", color = "white", bins = 30) +
+      geom_histogram(fill = "#dd2020", color = "#c5c5c8", bins = 30) +
       labs(title = paste("Distribution of", input$plot_col),
            x = input$plot_col, y = "Count") +
-      theme_bw()
+      theme_bw() +
+      theme(text = element_text(family = "pressstart")) # match font
   })
   
   output$data <- DT::renderDataTable({ data() })
@@ -329,7 +390,8 @@ server <- function(input, output, session) {
     pheatmap(counts_filtered2(),
              show_rownames = FALSE,
              show_colnames = TRUE,
-             scale = "row")
+             scale = "row",
+             color = colorRampPalette(c("#4a90d9", "#cccccc", "#dd2020"))(100))
   })
   
   # t2 pca output
@@ -347,13 +409,14 @@ server <- function(input, output, session) {
       sample = rownames(pca_result$x)
     )
     ggplot(pca_df, aes(x = PC1, y = PC2, label = sample)) +
-      geom_point(size = 3) +
+      geom_point(size = 3, color = "#dd2020") +
       labs(
         title = "PCA",
         x = paste0("PC1 (", var_explained[1], "%)"),
         y = paste0("PC2 (", var_explained[2], "%)")
       ) +
-      theme_bw()
+      theme_bw() +
+      theme(text = element_text(family = "pressstart")) # match font
   })
   
   # t2 data table output
@@ -381,11 +444,11 @@ server <- function(input, output, session) {
   
   #tab 4 outputs
   output$heatmap4 <- renderPlot({
-    req(network_data())
     pheatmap(network_data()$subset,
              show_rownames = TRUE,
              show_colnames = TRUE,
-             scale = "row")
+             scale = "row",
+             color = colorRampPalette(c("#4a90d9", "#cccccc", "#dd2020"))(100))
   })
   # network plot
   output$networkplot <- renderPlot({
@@ -401,14 +464,19 @@ server <- function(input, output, session) {
     g <- graph_from_adjacency_matrix(adj_mat, 
                                      mode = "undirected", 
                                      weighted = TRUE)
+    par(bg = "#c0c0c0")
     
     # plot network
     plot(g, 
          vertex.label = V(g)$name,
-         vertex.color = "steelblue",
-         vertex.size = 20,
+         vertex.color = "#dd2020",
+         vertex.label.color = "white",
+         vertex.label.cex = 0.8,
+         vertex.size = 35,
          edge.width = E(g)$weight * 2,
-         main = "Gene Correlation Network")
+         edge.color = "#0d0c0c",        # add this - dark edge color
+         main = "Gene Correlation Network",
+         bg = "#c0c0c0")
   })
   
   # stats table
