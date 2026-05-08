@@ -34,4 +34,20 @@ Upload `normalized_counts.csv`, enter gene names one per line, and set a correla
 
 ## Data Files
 All processed data files are in the `data/` folder:
-- `sample_info.csv` — sam
+- `sample_info.csv` — sample metadata including condition, age of death, PMI, and RIN
+- `normalized_counts.csv` — VST normalized counts matrix
+- `de_results.csv` — DESeq2 differential expression results (HD vs Control)
+
+## Preprocessing
+Raw data was downloaded from GEO (GSE64810). Genes were filtered following the original authors' approach — removing genes where more than 50% of samples in either condition had zero counts (39,376 → 26,690 genes). DESeq2 was run comparing HD vs Control with condition as the only covariate. Counts were VST normalized for visualization.
+
+## Requirements
+```r
+install.packages(c("shiny", "bslib", "tidyverse", "DT", 
+                   "pheatmap", "ggrepel", "igraph", "showtext"))
+```
+
+## How to Run
+```r
+shiny::runApp("app.R")
+```
