@@ -8,7 +8,16 @@ An interactive R Shiny application for exploring RNA-seq gene expression data fr
 - **GEO Accession:** GSE64810
 - **Comparison:** 20 Huntington's Disease vs 49 neurologically normal controls
 - **Tissue:** Human dorsolateral prefrontal cortex (Brodmann Area 9)
-
+  
+## Preprocessing Code
+The R Markdown file used to preprocess the raw data is included in this repository as `shiny-markdow.Rmd`. It contains all code for:
+- Loading and parsing the raw counts matrix and series matrix
+- Building the sample metadata table (coldata)
+- Filtering low-expressed genes
+- Running DESeq2
+- VST normalization
+- Saving all three CSV files used by the Shiny app
+  
 ## App Features
 
 ### Tab 1 — Sample Info
